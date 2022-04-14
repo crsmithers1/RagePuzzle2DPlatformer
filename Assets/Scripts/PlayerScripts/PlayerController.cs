@@ -5,7 +5,7 @@ using UnityEngine;
 public class PlayerController : MonoBehaviour
 {
     #region Variables & Components
-    private float movementInputDirection;
+    [HideInInspector] public float movementInputDirection;
     private float lookInputDirection;
     private float jumpTimer;
     private float turnTimer;
@@ -17,7 +17,6 @@ public class PlayerController : MonoBehaviour
     [HideInInspector] public int facingDirection = 1;
     private int lastWallJumpDirection;
 
-    private Rigidbody2D rb;
     private Animator anim;
 
     [Header("Developer Mode")]
@@ -25,7 +24,7 @@ public class PlayerController : MonoBehaviour
 
     [Header("Movement Settings")]
     [Tooltip("The speed the Character moves")] public float movementSpeed = 4.0f;
-    [Tooltip("The max amount of abilities the Character can use")] public int maxEnergy = 2;
+    [Tooltip("The max amount of abilities the Character can use")] public int maxEnergy;
     [Tooltip("The power of a full press jump")] public float jumpForce = 6.0f;
     [Tooltip("The amount of time the dash ability takes")] public float dashTime = 0.25f;
     [Tooltip("The speed which the dash ability travels")] public float dashSpeed = 20f;
@@ -57,14 +56,14 @@ public class PlayerController : MonoBehaviour
 
     [Header("States")]
     [Tooltip("Is the Character walking")][SerializeField] private bool isWalking;
-    [Tooltip("Is the Character touching the ground")][SerializeField] private bool isGrounded;
+    [Tooltip("Is the Character touching the ground")] public bool isGrounded;
     [Tooltip("Is the Character touncking the floor")][SerializeField] private bool isTouchingWall;
     [Tooltip("Is the Character wall sliding")][SerializeField] private bool isWallSliding;
     [Tooltip("Is the Character shooting")][SerializeField] private bool isShooting;
     [Tooltip("Is the Character shooting up")][SerializeField] private bool isShootingUp;
-    private bool isShootingDUp;
+    [Tooltip("Is the Character Shooting DUp")] [SerializeField] private bool isShootingDUp;
     [Tooltip("Is the Character shooting Down")][SerializeField] private bool isShootingDown;
-    [Tooltip("Is the Character falling downwards")][SerializeField] private bool isFalling;
+    [Tooltip("Is the Character falling downwards")] public bool isFalling;
     [Tooltip("Is the Character using the dash ability")][SerializeField] private bool isDashing;
     [Tooltip("Is the Character too close to a wall to dash")][SerializeField] private bool isNotAtDashDistance;
     private bool isFacingRight = true;
@@ -76,10 +75,13 @@ public class PlayerController : MonoBehaviour
     private bool canFlip;
     private bool hasWallJumped;
     public bool isStomping;
+    public bool isPlatform;
     private readonly bool isKnockback;
     public bool isLight;
+    public bool isAimUp;
     public bool isAimDR;
     public bool isAimDL;
+    public bool isAimD;
 
     [Header("Particle & Sound Effects")]
     [Tooltip("This is the Light component from the Characters Head")] public GameObject headLight;
@@ -88,6 +90,7 @@ public class PlayerController : MonoBehaviour
     [Tooltip("This is the trail from jumping")] public ParticleSystem trailLeft;
     [Tooltip("This is the trail from shooting")] public ParticleSystem trailBullet;
     [Tooltip("This is the trail from shooting Up")] public ParticleSystem trailBulletUp;
+    [Tooltip("This is the trail from shooting DUp")] public ParticleSystem trailBulletDUp;
     [Tooltip("This is the trail from shooting Down")] public ParticleSystem trailBulletDown;
     [Tooltip("This is the Energy Particles when damaged")] public ParticleSystem damagePS;
     [Tooltip("This is the trail from dashing")] public ParticleSystem trailDash;
@@ -105,19 +108,22 @@ public class PlayerController : MonoBehaviour
     public float dashCheckDistance;
     public LayerMask whatIsGround;
 
-
     [Header("Other Settings")]
     public ControlCenter controlCenter;
+    public Rigidbody2D rb;
+    public PlatformMovement platformMovement;
+
     #endregion
     #region Unity Callbacks
     void Start()
     {
+        maxEnergy = controlCenter.maxEnergy;
         source = GetComponent<AudioSource>();
         rb = GetComponent<Rigidbody2D>();
         anim = GetComponent<Animator>();
         EnergyLeft = maxEnergy;
         wallJumpDirection.Normalize();
-        isLight = true;
+        isLight = false;
     }
 
     void Update()
@@ -132,7 +138,9 @@ public class PlayerController : MonoBehaviour
         CheckDash();
         CheckAimDR();
         CheckAimDL();
+        CheckAimUp();
         Light();
+        CheckPlatformGrounded();
     }
 
     private void FixedUpdate()
@@ -141,11 +149,11 @@ public class PlayerController : MonoBehaviour
         CheckSurroundings();
     }
 
-    private void OnTriggerEnter2D(Collider2D collision)
+    private void OnTriggerEnter2D(Collider2D other)
     {
-        if (collision.CompareTag("Enemy"))
+        if (other.CompareTag("Enemy") && rb.velocity.y <= 0)
         {
-            collision.GetComponent<MagnetBot>().TakeDamage(stompDamage);
+            other.GetComponent<EnemyDamage>().TakeDamage(stompDamage);
             isStomping = true;
             Debug.Log("Stomp");
             StompBounce();
@@ -166,11 +174,11 @@ public class PlayerController : MonoBehaviour
     }
     private void CheckMovementDirection()
     {
-        if (isFacingRight && movementInputDirection < 0)
+        if (isFacingRight && movementInputDirection < 0 && !isAimDR)
         {
             Flip();
         }
-        else if (!isFacingRight && movementInputDirection > 0)
+        else if (!isFacingRight && movementInputDirection > 0 && !isAimDL)
         {
             Flip();
         }
@@ -184,7 +192,14 @@ public class PlayerController : MonoBehaviour
             isWalking = false;
         }
     }
-
+    private void CheckPlatformGrounded()
+    {
+        isPlatform = platformMovement.isOnPlatform;
+        if (isPlatform)
+        {
+            isGrounded = true;
+        }
+    }
     private void CheckIfFalling()
     {
         if(!isGrounded && !isWallSliding && rb.velocity.y < 0)
@@ -250,6 +265,18 @@ public class PlayerController : MonoBehaviour
             isWallSliding = true;
             Debug.Log("Wall Sliding");
         }
+        else if (isWallSliding && isTouchingWall)
+        {
+            isWallSliding = true;
+        }
+        else if (!isTouchingWall)
+        {
+            isWallSliding = false;
+        }
+        else if (isWallSliding && movementInputDirection != facingDirection)
+        {
+            isWallSliding = false;
+        }
         else
         {
             isWallSliding = false;
@@ -278,40 +305,59 @@ public class PlayerController : MonoBehaviour
         }
     }
 
+   private void CheckAimUp()
+    {
+        if(lookInputDirection == -1 || isAimDL && isAimDR)
+        {
+            isAimUp = true;
+            headLight.transform.eulerAngles = new Vector3(0, 0, 0);
+            Debug.Log("Aim Up");
+        }
+        else
+        {
+            isAimUp = false;
+            return;
+        }
+    }
+
     private void CheckAimDR()
     {
-        if(facingDirection == 1)
+        if (facingDirection == 1)
         {
-            if (Input.GetButton("AimDR"))
+            if (Input.GetButtonDown("AimDR"))
             {
                 isAimDR = true;
+                isAimD = true;
                 headLight.transform.eulerAngles = Vector3.forward * -45;
                 Debug.Log("Aim Diagonal Right");
             }
-            else
+            else if(Input.GetButtonUp("AimDR"))
             {
                 if (isAimDL == false)
                 {
-                    headLight.transform.eulerAngles = new Vector3(0, 0, 90 * facingDirection);
+                    headLight.transform.eulerAngles = new Vector3(0, 0, -90 * facingDirection);
                 }
                 isAimDR = false;
+                isAimD = false;
             }
         }
-        else if(facingDirection == -1)
+        else if (facingDirection == -1)
         {
-            if (Input.GetButton("AimDR"))
+            if (Input.GetButtonDown("AimDR"))
             {
                 Flip();
                 isAimDR = true;
+                isAimD = true;
                     headLight.transform.eulerAngles = Vector3.forward * -45;
                 Debug.Log("Aim Diagonal Right");
             }
-            else
+            else if (Input.GetButtonUp("AimDR"))
             {
                 isAimDR = false;
-                if(isAimDL == false)
+                isAimD = false;
+                if (isAimDL == false)
                 {
-                headLight.transform.eulerAngles = new Vector3(0, 0, 90 * facingDirection);
+                headLight.transform.eulerAngles = new Vector3(0, 0, -90 * facingDirection);
                 }
             }
         }
@@ -321,16 +367,19 @@ public class PlayerController : MonoBehaviour
     {
         if(facingDirection == -1)
         {
-            if (Input.GetButton("AimDL"))
+            if (Input.GetButtonDown("AimDL"))
             {
             isAimDL = true;
+                isAimD = true;
                 headLight.transform.eulerAngles = Vector3.forward * 45;
                 Debug.Log("Aim Diagonal Left");
             }
-            else
+            else if (Input.GetButtonUp("AimDL"))
             {
             isAimDL = false;
-                if(isAimDR == false)
+                isAimD = false;
+
+                if (isAimDR == false)
                 {
                 headLight.transform.eulerAngles = new Vector3(0, 0, -90 * facingDirection);
                 }
@@ -338,16 +387,18 @@ public class PlayerController : MonoBehaviour
         }
         if (facingDirection == 1)
         {
-            if (Input.GetButton("AimDL"))
+            if (Input.GetButtonDown("AimDL"))
             {
                 Flip();
                 isAimDL = true;
+                isAimD = true;
                 headLight.transform.eulerAngles = Vector3.forward * 45;
                 Debug.Log("Aim Diagonal Left");
             }
-            else
+            else if (Input.GetButtonUp("AimDL"))
             {
                 isAimDL = false;
+                isAimD = false;
                 if (isAimDR == false)
                 {
                     headLight.transform.eulerAngles = new Vector3(0, 0, -90 * facingDirection);
@@ -355,7 +406,6 @@ public class PlayerController : MonoBehaviour
             }
         }
     }
-
     private void CheckInput()
     {
         movementInputDirection = Input.GetAxisRaw("Horizontal");
@@ -417,7 +467,7 @@ public class PlayerController : MonoBehaviour
             Shoot();
             Debug.Log("Shoot Horizontal");
         }
-        else if (lookInputDirection == -1 && !isAimDL && !isAimDR && Input.GetButtonDown("Fire1") && isGrounded && EnergyLeft > 0)
+        else if (isAimUp && Input.GetButtonDown("Fire1") && isGrounded && EnergyLeft > 0)
         {
             isShooting = false;
             isShootingUp = true;
@@ -446,7 +496,7 @@ public class PlayerController : MonoBehaviour
         }
         else if (lookInputDirection != 1 && Input.GetButtonDown("Fire1") && !isGrounded && EnergyLeft > 0)
         {
-            rb.velocity = new Vector2(blastKnockback * 2, rb.velocity.y);
+            rb.velocity = new Vector2(blastKnockback * 2 * -facingDirection, rb.velocity.y);
             isShooting = true;
             isShootingUp = false;
             isShootingDown = false;
@@ -494,7 +544,7 @@ public class PlayerController : MonoBehaviour
     {
         if (jumpTimer > 0)
         {
-            if (!isGrounded && isTouchingWall && movementInputDirection != 0 && movementInputDirection != facingDirection)
+            if (!isGrounded && isWallSliding && movementInputDirection != facingDirection)
             {
                 WallJump();
             }
@@ -544,7 +594,7 @@ public class PlayerController : MonoBehaviour
             rb.velocity = new Vector2(movementSpeed * movementInputDirection, rb.velocity.y);
         }
 
-        if (isShooting)
+        if (isShooting && isGrounded)
         {
             rb.velocity = new Vector2(-facingDirection * blastKnockback, 0);
         }
@@ -583,7 +633,7 @@ public class PlayerController : MonoBehaviour
             rb.velocity = new Vector2(rb.velocity.x, 0.0f);
             isWallSliding = false;
             EnergyLeft--;
-            Vector2 forceToAdd = new Vector2(wallJumpForce * wallJumpDirection.x * movementInputDirection, wallJumpForce * wallJumpDirection.y);
+            Vector2 forceToAdd = new Vector2(wallJumpForce * wallJumpDirection.x * -facingDirection, wallJumpForce * wallJumpDirection.y);
             rb.AddForce(forceToAdd, ForceMode2D.Impulse);
             jumpTimer = 0;
             isAttemptingToJump = false;
@@ -594,8 +644,10 @@ public class PlayerController : MonoBehaviour
             hasWallJumped = true;
             wallJumpTimer = wallJumpTimerSet;
             lastWallJumpDirection = -facingDirection;
+            isFalling = false;
             CreateRightTrail();
             CreateLeftTrail();
+            Flip();
             Debug.Log("Wall Jump");
         }
     }
@@ -677,7 +729,7 @@ public class PlayerController : MonoBehaviour
         if ((EnergyLeft > 0) && !isWallSliding)
         {
             Instantiate(bulletDRUpPrefab, firePointDUp.position, firePointDUp.rotation);
-            //CreateBulletDUpTrail();
+            CreateBulletDUpTrail();
             EnergyLeft--;
         }
     }
@@ -687,7 +739,7 @@ public class PlayerController : MonoBehaviour
         if ((EnergyLeft > 0) && !isWallSliding)
         {
             Instantiate(bulletDLUpPrefab, firePointDUp.position, firePointDUp.rotation);
-            //CreateBulletDUpTrail();
+            CreateBulletDUpTrail();
             EnergyLeft--;
         }
     }
@@ -784,6 +836,14 @@ public class PlayerController : MonoBehaviour
         source.Play();
         //CinemachineShake.Instance.ShakeCamera(1f, 0.05f);
     }
+
+    void CreateBulletDUpTrail()
+    {
+        trailBulletDUp.Play();
+        source.clip = shootSound;
+        source.Play();
+        //CinemachineShake.Instance.ShakeCamera(1f, 0.05f);
+    }
     void CreateBulletDownTrail()
     {
         trailBulletDown.Play();
@@ -813,6 +873,10 @@ public class PlayerController : MonoBehaviour
         anim.SetFloat("yVelocity", rb.velocity.y);
         anim.SetBool("isWallSliding", isWallSliding);
         anim.SetBool("isShooting", isShooting);
+        anim.SetBool("isAimUp", isAimUp);
+        anim.SetBool("isAimDR", isAimDR);
+        anim.SetBool("isAimDL", isAimDL);
+        anim.SetBool("isAimD", isAimD);
         anim.SetBool("isShootingUp", isShootingUp);
         anim.SetBool("isShootingDUp", isShootingDUp);
         anim.SetBool("isShootingDown", isShootingDown);

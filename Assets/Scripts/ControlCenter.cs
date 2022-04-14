@@ -8,6 +8,10 @@ public class ControlCenter : MonoBehaviour
     public CoinCounter coinCounter;
     public CountdownTimer countdownTimer;
     public PlayerController playerController;
+    public float amountOfCoinsNeeded;
+    public int maxEnergy;
+    public float levelTime;
+
     public void ResetScene()
     {
         SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);

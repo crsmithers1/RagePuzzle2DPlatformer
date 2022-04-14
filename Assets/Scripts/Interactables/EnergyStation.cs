@@ -7,11 +7,13 @@ public class EnergyStation : MonoBehaviour
 {
     public float amountOfCoinsNeeded;
     public PlayerController playerController;
+    public ControlCenter controlCenter;
     public AudioSource source;
     public AudioClip clip;
 
     public void Awake()
     {
+        amountOfCoinsNeeded = controlCenter.amountOfCoinsNeeded;
         CoinCounter.coinAmount = 0;
     }
 

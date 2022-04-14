@@ -27,15 +27,17 @@ public class CinemachineShake : MonoBehaviour
         if(shakeTimer > 0)
         {
             shakeTimer -= Time.deltaTime;
-            if(shakeTimer <= 0f)
+        }
+        if(shakeTimer <= 0f)
             {
                 //Timer Over!
                 CinemachineBasicMultiChannelPerlin cinemachineBasicMultiChannelPerlin = cinemachineVirtualCamera.GetCinemachineComponent<CinemachineBasicMultiChannelPerlin>();
                 cinemachineBasicMultiChannelPerlin.m_AmplitudeGain = 0f;
                 cinemachineVirtualCamera.LookAt.CompareTag("Player");
                 cinemachineVirtualCamera.Follow.CompareTag("Player");
-                cinemachineVirtualCamera.transform.position = new Vector3(0, 0, 0);
-            }
+                cinemachineVirtualCamera.transform.rotation = new Quaternion(0, 0, 0, 0);
+                cinemachineVirtualCamera.transform.position = new Vector3 (0,0,0);
+
         }
     }
 }

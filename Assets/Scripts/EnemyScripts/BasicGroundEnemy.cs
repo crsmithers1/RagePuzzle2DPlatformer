@@ -5,23 +5,24 @@ using UnityEngine;
 public class BasicGroundEnemyTemplate : MonoBehaviour
 {
 	private Rigidbody2D rb;
-	private Animator anim;
+	//private Animator anim;
 	private int facingDirection = 1;
 	private Vector2 damageTopRight;
 	private Vector2 damageBotLeft;
 
 	[Header("Enemy Stats")]
-	public int health = 2;
-	public float movementSpeed = 4;
+	public float movementSpeed = 1;
 	public float lastDamageTime;
 	public float damageCooldown;
-	public Vector2 knockbackDistance;
 	private bool isKnockback;
+	private bool isDamaged;
+	public EnemyDamage enemyDamage;
 
 	[Header("Collision Senses")]
 	public Transform groundCheck;
 	public float groundCheckDistance;
 	public bool isGrounded;
+	public bool wasGrounded;
 	public bool isMoving;
 	public LayerMask whatIsGround;
 	public Transform wallCheck;
@@ -38,119 +39,109 @@ public class BasicGroundEnemyTemplate : MonoBehaviour
 	public AudioClip hit;
 	public AudioClip die;
 
-    #region Unity Callback Functions
+	#region Unity Callback Functions
 
-    private void Start()
-    {
-        rb = GetComponent<Rigidbody2D>();
-		anim = GetComponent<Animator>();
+	private void Start()
+	{
+		rb = GetComponent<Rigidbody2D>();
+		//anim = GetComponent<Animator>();
 		facingDirection = 1;
-    }
+	}
 
-    private void Update()
-    {
+	private void Update()
+	{
+		isGrounded = enemyDamage.isGrounded;
+		isDamaged = enemyDamage.isDamaged;
+		isKnockback = enemyDamage.isKnockback;
 		CollisionSenses();
 		EnemyMove();
 		DealDamage();
-		UpdateAnimations();
+		//UpdateAnimations();
 
 	}
 
-	private void UpdateAnimations()
-	{
-		anim.SetBool("isMoving", isMoving);
-		anim.SetBool("isKnockback", isKnockback);
-	}
+	//private void UpdateAnimations()
+	//{
+	//anim.SetBool("isMoving", isMoving);
+	//anim.SetBool("isKnockback", isKnockback);
+	//}
 	#endregion
 
 	#region Enemy AI
 
 	void CollisionSenses()
-    {
+	{
 		isGrounded = Physics2D.Raycast(groundCheck.position, Vector2.down, groundCheckDistance, whatIsGround);
-        isTouchingWall = Physics2D.Raycast(wallCheck.position, transform.right, wallCheckDistance, whatIsGround);
-    }
+		isTouchingWall = Physics2D.Raycast(wallCheck.position, transform.right, wallCheckDistance, whatIsGround);
+	}
 
 	void EnemyMove()
-    {
-        if(isGrounded && !isTouchingWall && !isKnockback)
-        {
-			rb.velocity = new Vector2(facingDirection * movementSpeed, 0.0f);
-			isMoving = true;
-        }
-        if (isTouchingWall || !isGrounded)
-        {
-			Flip();
-			isMoving = false;
-        }
-        if (isGrounded)
-        {
-			isKnockback = false;
-        }
-    }
+	{
+		if (!isDamaged)
+		{
+
+			if (isGrounded && !isTouchingWall && !isKnockback)
+			{
+				rb.velocity = new Vector2(facingDirection * movementSpeed, 0.0f);
+				isMoving = true;
+
+				//CreateSmoke();
+			}
+			if (isTouchingWall || !isGrounded && !isKnockback)
+			{
+				Flip();
+				isMoving = false;
+			}
+			if (isGrounded && wasGrounded)
+			{
+
+				enemyDamage.isGrounded = true;
+				enemyDamage.isKnockback = false;
+				wasGrounded = false;
+
+			}
+		}
+		else if (isDamaged && !isGrounded)
+		{
+			isDamaged = false;
+			enemyDamage.isDamaged = false;
+			wasGrounded = true;
+
+		}
+	}
 
 	void DealDamage()
 	{
 
-        if (!playerController.isStomping)
-        {
-		if (Time.time >= lastDamageTime + damageCooldown)
+		if (!playerController.isStomping)
 		{
-			damageBotLeft.Set(damageCheck.position.x - (damageWidth / 2), damageCheck.position.y - (damageHeight / 2));
-			damageTopRight.Set(damageCheck.position.x + (damageWidth / 2), damageCheck.position.y + (damageHeight / 2));
-
-			Collider2D collision = Physics2D.OverlapArea(damageBotLeft, damageTopRight, whatIsPlayer);
-
-			if (collision != null)
+			if (Time.time >= lastDamageTime + damageCooldown)
 			{
-				lastDamageTime = Time.time;
-				playerController.DamageKnockBack();
-				playerController.DecreaseEnergy();
+				damageBotLeft.Set(damageCheck.position.x - (damageWidth / 2), damageCheck.position.y - (damageHeight / 2));
+				damageTopRight.Set(damageCheck.position.x + (damageWidth / 2), damageCheck.position.y + (damageHeight / 2));
+
+				Collider2D collision = Physics2D.OverlapArea(damageBotLeft, damageTopRight, whatIsPlayer);
+
+				if (collision != null)
+				{
+					lastDamageTime = Time.time;
+					playerController.DamageKnockBack();
+					playerController.DecreaseEnergy();
+				}
 			}
 		}
-        }
 	}
 
 	private void Flip()
-    {
+	{
 		facingDirection *= -1;
 		transform.Rotate(0.0f, 180.0f, 0.0f);
 	}
 
-    #endregion
+	#endregion
 
-    #region Enemy Taking Damage Functions
-    public void TakeDamage(int damage)
-	{
-		health -= damage;
-		source.clip = hit;
-		source.Play();
-		Knockback();
-
-		if (health <= 0)
-		{
-			source.clip = die;
-			source.Play();
-			Die();
-		}
-	}
-
-	private void Knockback()
-    {
-		isKnockback = true;
-		isGrounded = false;
-		isMoving = false;
-		rb.velocity = new Vector2(-knockbackDistance.x, knockbackDistance.y);
-    }
-
-	void Die()
-	{
-		Destroy(gameObject);
-	}
-    #endregion
-
-    #region Other Functions
-    private void OnDrawGizmos()
+	#region Other Functions
+	private void OnDrawGizmos()
 	{
 		Gizmos.DrawLine(groundCheck.position, new Vector2(groundCheck.position.x, groundCheck.position.y - groundCheckDistance));
 		Gizmos.DrawLine(wallCheck.position, new Vector2(wallCheck.position.x + wallCheckDistance * facingDirection, wallCheck.position.y));
@@ -165,5 +156,5 @@ public class BasicGroundEnemyTemplate : MonoBehaviour
 		Gizmos.DrawLine(topRight, topLeft);
 		Gizmos.DrawLine(topLeft, botLeft);
 	}
-    #endregion
+	#endregion
 }

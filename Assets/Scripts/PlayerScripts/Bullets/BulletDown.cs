@@ -5,8 +5,8 @@ using UnityEngine;
 public class BulletDown : MonoBehaviour
 {
 
-	public float speed = 20f;
-	public int damage = 40;
+	public float speed = 10f;
+	public int damage = 1;
 	public Rigidbody2D rb;
 	public GameObject impactEffect;
 
@@ -19,14 +19,14 @@ public class BulletDown : MonoBehaviour
 	void OnTriggerEnter2D(Collider2D hitInfo)
 	{
 		BreakableObject bo = hitInfo.GetComponent<BreakableObject>();
-		MagnetBot enemy = hitInfo.GetComponent<MagnetBot>();
+		EnemyDamage enemyDamage = hitInfo.GetComponent<EnemyDamage>();
 		if (bo != null)
 		{
 			bo.TakeDamage(damage);
 		}
-		else if (enemy != null)
+		else if (enemyDamage != null)
 		{
-			enemy.TakeDamage(damage);
+			enemyDamage.TakeDamage(damage);
 		}
 
 		Instantiate(impactEffect, transform.position, transform.rotation);
