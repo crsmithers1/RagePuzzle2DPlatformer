@@ -5,7 +5,7 @@ using UnityEngine;
 public class PlayerController : MonoBehaviour
 {
     #region Variables & Components
-    private float movementInputDirection;
+    [HideInInspector] public float movementInputDirection;
     private float lookInputDirection;
     private float jumpTimer;
     private float turnTimer;
@@ -17,7 +17,6 @@ public class PlayerController : MonoBehaviour
     [HideInInspector] public int facingDirection = 1;
     private int lastWallJumpDirection;
 
-    private Rigidbody2D rb;
     private Animator anim;
 
     [Header("Developer Mode")]
@@ -57,14 +56,14 @@ public class PlayerController : MonoBehaviour
 
     [Header("States")]
     [Tooltip("Is the Character walking")][SerializeField] private bool isWalking;
-    [Tooltip("Is the Character touching the ground")][SerializeField] private bool isGrounded;
+    [Tooltip("Is the Character touching the ground")] public bool isGrounded;
     [Tooltip("Is the Character touncking the floor")][SerializeField] private bool isTouchingWall;
     [Tooltip("Is the Character wall sliding")][SerializeField] private bool isWallSliding;
     [Tooltip("Is the Character shooting")][SerializeField] private bool isShooting;
     [Tooltip("Is the Character shooting up")][SerializeField] private bool isShootingUp;
-    private bool isShootingDUp;
+    [Tooltip("Is the Character Shooting DUp")] [SerializeField] private bool isShootingDUp;
     [Tooltip("Is the Character shooting Down")][SerializeField] private bool isShootingDown;
-    [Tooltip("Is the Character falling downwards")][SerializeField] private bool isFalling;
+    [Tooltip("Is the Character falling downwards")] public bool isFalling;
     [Tooltip("Is the Character using the dash ability")][SerializeField] private bool isDashing;
     [Tooltip("Is the Character too close to a wall to dash")][SerializeField] private bool isNotAtDashDistance;
     private bool isFacingRight = true;
@@ -76,8 +75,10 @@ public class PlayerController : MonoBehaviour
     private bool canFlip;
     private bool hasWallJumped;
     public bool isStomping;
+    public bool isPlatform;
     private readonly bool isKnockback;
     public bool isLight;
+    public bool isAimUp;
     public bool isAimDR;
     public bool isAimDL;
 
@@ -88,6 +89,7 @@ public class PlayerController : MonoBehaviour
     [Tooltip("This is the trail from jumping")] public ParticleSystem trailLeft;
     [Tooltip("This is the trail from shooting")] public ParticleSystem trailBullet;
     [Tooltip("This is the trail from shooting Up")] public ParticleSystem trailBulletUp;
+    [Tooltip("This is the trail from shooting DUp")] public ParticleSystem trailBulletDUp;
     [Tooltip("This is the trail from shooting Down")] public ParticleSystem trailBulletDown;
     [Tooltip("This is the Energy Particles when damaged")] public ParticleSystem damagePS;
     [Tooltip("This is the trail from dashing")] public ParticleSystem trailDash;
@@ -105,9 +107,12 @@ public class PlayerController : MonoBehaviour
     public float dashCheckDistance;
     public LayerMask whatIsGround;
 
-
     [Header("Other Settings")]
     public ControlCenter controlCenter;
+    public Rigidbody2D rb;
+    public PlatformMovement platformMovement;
+    public MagnetBot magnetBot;
+
     #endregion
     #region Unity Callbacks
     void Start()
@@ -132,7 +137,9 @@ public class PlayerController : MonoBehaviour
         CheckDash();
         CheckAimDR();
         CheckAimDL();
+        CheckAimUp();
         Light();
+        CheckPlatformGrounded();
     }
 
     private void FixedUpdate()
@@ -141,11 +148,11 @@ public class PlayerController : MonoBehaviour
         CheckSurroundings();
     }
 
-    private void OnTriggerEnter2D(Collider2D collision)
+    private void OnTriggerEnter2D(Collider2D other)
     {
-        if (collision.CompareTag("Enemy"))
+        if (other.CompareTag("Enemy"))
         {
-            collision.GetComponent<MagnetBot>().TakeDamage(stompDamage);
+            other.GetComponent<MagnetBot>().TakeDamage(stompDamage);
             isStomping = true;
             Debug.Log("Stomp");
             StompBounce();
@@ -184,7 +191,14 @@ public class PlayerController : MonoBehaviour
             isWalking = false;
         }
     }
-
+    private void CheckPlatformGrounded()
+    {
+        isPlatform = platformMovement.isOnPlatform;
+        if (isPlatform)
+        {
+            isGrounded = true;
+        }
+    }
     private void CheckIfFalling()
     {
         if(!isGrounded && !isWallSliding && rb.velocity.y < 0)
@@ -250,6 +264,18 @@ public class PlayerController : MonoBehaviour
             isWallSliding = true;
             Debug.Log("Wall Sliding");
         }
+        else if (isWallSliding && isTouchingWall)
+        {
+            isWallSliding = true;
+        }
+        else if (!isTouchingWall)
+        {
+            isWallSliding = false;
+        }
+        else if (isWallSliding && movementInputDirection != facingDirection)
+        {
+            isWallSliding = false;
+        }
         else
         {
             isWallSliding = false;
@@ -275,6 +301,21 @@ public class PlayerController : MonoBehaviour
                 canMove = true;
                 canFlip = true;
             }
+        }
+    }
+
+   private void CheckAimUp()
+    {
+        if(lookInputDirection == -1 || isAimDL && isAimDR)
+        {
+            isAimUp = true;
+            headLight.transform.eulerAngles = new Vector3(0, 0, 0);
+            Debug.Log("Aim Up");
+        }
+        else
+        {
+            isAimUp = false;
+            return;
         }
     }
 
@@ -355,7 +396,6 @@ public class PlayerController : MonoBehaviour
             }
         }
     }
-
     private void CheckInput()
     {
         movementInputDirection = Input.GetAxisRaw("Horizontal");
@@ -417,7 +457,7 @@ public class PlayerController : MonoBehaviour
             Shoot();
             Debug.Log("Shoot Horizontal");
         }
-        else if (lookInputDirection == -1 && !isAimDL && !isAimDR && Input.GetButtonDown("Fire1") && isGrounded && EnergyLeft > 0)
+        else if (isAimUp && Input.GetButtonDown("Fire1") && isGrounded && EnergyLeft > 0)
         {
             isShooting = false;
             isShootingUp = true;
@@ -446,7 +486,7 @@ public class PlayerController : MonoBehaviour
         }
         else if (lookInputDirection != 1 && Input.GetButtonDown("Fire1") && !isGrounded && EnergyLeft > 0)
         {
-            rb.velocity = new Vector2(blastKnockback * 2, rb.velocity.y);
+            rb.velocity = new Vector2(blastKnockback * 2 * -facingDirection, rb.velocity.y);
             isShooting = true;
             isShootingUp = false;
             isShootingDown = false;
@@ -494,7 +534,7 @@ public class PlayerController : MonoBehaviour
     {
         if (jumpTimer > 0)
         {
-            if (!isGrounded && isTouchingWall && movementInputDirection != 0 && movementInputDirection != facingDirection)
+            if (!isGrounded && isWallSliding && movementInputDirection != facingDirection)
             {
                 WallJump();
             }
@@ -544,7 +584,7 @@ public class PlayerController : MonoBehaviour
             rb.velocity = new Vector2(movementSpeed * movementInputDirection, rb.velocity.y);
         }
 
-        if (isShooting)
+        if (isShooting && isGrounded)
         {
             rb.velocity = new Vector2(-facingDirection * blastKnockback, 0);
         }
@@ -583,7 +623,7 @@ public class PlayerController : MonoBehaviour
             rb.velocity = new Vector2(rb.velocity.x, 0.0f);
             isWallSliding = false;
             EnergyLeft--;
-            Vector2 forceToAdd = new Vector2(wallJumpForce * wallJumpDirection.x * movementInputDirection, wallJumpForce * wallJumpDirection.y);
+            Vector2 forceToAdd = new Vector2(wallJumpForce * wallJumpDirection.x * -facingDirection, wallJumpForce * wallJumpDirection.y);
             rb.AddForce(forceToAdd, ForceMode2D.Impulse);
             jumpTimer = 0;
             isAttemptingToJump = false;
@@ -594,8 +634,10 @@ public class PlayerController : MonoBehaviour
             hasWallJumped = true;
             wallJumpTimer = wallJumpTimerSet;
             lastWallJumpDirection = -facingDirection;
+            isFalling = false;
             CreateRightTrail();
             CreateLeftTrail();
+            Flip();
             Debug.Log("Wall Jump");
         }
     }
@@ -677,7 +719,7 @@ public class PlayerController : MonoBehaviour
         if ((EnergyLeft > 0) && !isWallSliding)
         {
             Instantiate(bulletDRUpPrefab, firePointDUp.position, firePointDUp.rotation);
-            //CreateBulletDUpTrail();
+            CreateBulletDUpTrail();
             EnergyLeft--;
         }
     }
@@ -687,7 +729,7 @@ public class PlayerController : MonoBehaviour
         if ((EnergyLeft > 0) && !isWallSliding)
         {
             Instantiate(bulletDLUpPrefab, firePointDUp.position, firePointDUp.rotation);
-            //CreateBulletDUpTrail();
+            CreateBulletDUpTrail();
             EnergyLeft--;
         }
     }
@@ -784,6 +826,14 @@ public class PlayerController : MonoBehaviour
         source.Play();
         //CinemachineShake.Instance.ShakeCamera(1f, 0.05f);
     }
+
+    void CreateBulletDUpTrail()
+    {
+        trailBulletDUp.Play();
+        source.clip = shootSound;
+        source.Play();
+        //CinemachineShake.Instance.ShakeCamera(1f, 0.05f);
+    }
     void CreateBulletDownTrail()
     {
         trailBulletDown.Play();
@@ -813,6 +863,9 @@ public class PlayerController : MonoBehaviour
         anim.SetFloat("yVelocity", rb.velocity.y);
         anim.SetBool("isWallSliding", isWallSliding);
         anim.SetBool("isShooting", isShooting);
+        anim.SetBool("isAimUp", isAimUp);
+        anim.SetBool("isAimDR", isAimDR);
+        anim.SetBool("isAimDL", isAimDL);
         anim.SetBool("isShootingUp", isShootingUp);
         anim.SetBool("isShootingDUp", isShootingDUp);
         anim.SetBool("isShootingDown", isShootingDown);

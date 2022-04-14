@@ -4,11 +4,14 @@ using UnityEngine;
 
 public class MagnetBot : MonoBehaviour
 {
-	private Rigidbody2D rb;
+	public Rigidbody2D rb;
+	public Rigidbody2D playerRB;
 	private Animator anim;
-	private int facingDirection = 1;
+	public int facingDirection = 1;
 	private Vector2 damageTopRight;
 	private Vector2 damageBotLeft;
+	private Vector2 magnetBotLeft;
+	private Vector2 magnetTopRight;
 
 	[Header("Enemy Stats")]
 	public int health = 2;
@@ -17,6 +20,9 @@ public class MagnetBot : MonoBehaviour
 	public float damageCooldown;
 	public Vector2 knockbackDistance;
 	private bool isKnockback;
+	public float attractStrength;
+	public float attractMovementSpeed;
+
 
 	[Header("Collision Senses")]
 	public Transform groundCheck;
@@ -31,6 +37,10 @@ public class MagnetBot : MonoBehaviour
 	public Transform damageCheck;
 	public float damageHeight;
 	public float damageWidth;
+	public Transform magnetCheck;
+	public float magnetHeight;
+	public float magnetWidth;
+	public bool isAttracting;
 	public LayerMask whatIsPlayer;
 
 	[Header("Audio & Particle Effects")]
@@ -45,6 +55,7 @@ public class MagnetBot : MonoBehaviour
     private void Start()
     {
         rb = GetComponent<Rigidbody2D>();
+		playerRB = GetComponent<Rigidbody2D>();
 		anim = GetComponent<Animator>();
 		facingDirection = 1;
     }
@@ -55,6 +66,7 @@ public class MagnetBot : MonoBehaviour
 		EnemyMove();
 		DealDamage();
 		UpdateAnimations();
+		Magnet();
 
 	}
 
@@ -62,6 +74,7 @@ public class MagnetBot : MonoBehaviour
 	{
 		anim.SetBool("isMoving", isMoving);
 		anim.SetBool("isKnockback", isKnockback);
+		anim.SetBool("isAttracting", isAttracting);
 	}
 	#endregion
 
@@ -75,20 +88,27 @@ public class MagnetBot : MonoBehaviour
 
 	void EnemyMove()
     {
-        if(isGrounded && !isTouchingWall && !isKnockback)
+        if(isGrounded && !isTouchingWall && !isKnockback && !isAttracting)
         {
 			rb.velocity = new Vector2(facingDirection * movementSpeed, 0.0f);
 			isMoving = true;
+			isAttracting = false;
 			CreateSmoke();
+        }
+        if (isAttracting)
+        {
+			rb.velocity = new Vector2(attractMovementSpeed * facingDirection, 0.0f);
         }
         if (isTouchingWall || !isGrounded)
         {
 			Flip();
 			isMoving = false;
+			isAttracting = false;
         }
-        if (isGrounded)
+        if (isGrounded && !isAttracting)
         {
 			isKnockback = false;
+			isAttracting = false;
         }
     }
 
@@ -111,6 +131,26 @@ public class MagnetBot : MonoBehaviour
 			}
         }
 	}
+
+	public void Magnet()
+    {
+		magnetBotLeft.Set(magnetCheck.position.x - (magnetWidth / 2), magnetCheck.position.y - (magnetHeight / 2));
+		magnetTopRight.Set(magnetCheck.position.x + (magnetWidth / 2), magnetCheck.position.y + (magnetHeight / 2));
+		Collider2D Magnet = Physics2D.OverlapArea(magnetBotLeft, magnetTopRight, whatIsPlayer);
+
+		if(Magnet != null)
+        {
+			playerController.rb.velocity = new Vector2(-facingDirection * attractStrength, playerController.rb.velocity.y); ;
+			isAttracting = true;
+			playerController.isGrounded = false;
+			playerController.isFalling = false;
+        }
+		else
+		{
+			isAttracting = false;
+			return;
+        }
+    }
 
 	private void Flip()
     {
@@ -170,10 +210,19 @@ public class MagnetBot : MonoBehaviour
 		Vector2 topRight = new Vector2(damageCheck.position.x + (damageWidth / 2), damageCheck.position.y + (damageHeight / 2));
 		Vector2 topLeft = new Vector2(damageCheck.position.x - (damageWidth / 2), damageCheck.position.y + (damageHeight / 2));
 
+		Vector2 magnetBotLeft = new Vector2(magnetCheck.position.x - (magnetWidth / 2), magnetCheck.position.y - (magnetHeight / 2));
+		Vector2 magnetBotRight = new Vector2(magnetCheck.position.x + (magnetWidth / 2), magnetCheck.position.y - (magnetHeight / 2));
+		Vector2 magnetTopRight = new Vector2(magnetCheck.position.x + (magnetWidth / 2), magnetCheck.position.y + (magnetHeight / 2));
+		Vector2 magnetTopLeft = new Vector2(magnetCheck.position.x - (magnetWidth / 2), magnetCheck.position.y + (magnetHeight / 2));
+
 		Gizmos.DrawLine(botLeft, botRight);
 		Gizmos.DrawLine(botRight, topRight);
 		Gizmos.DrawLine(topRight, topLeft);
 		Gizmos.DrawLine(topLeft, botLeft);
+		Gizmos.DrawLine(magnetBotLeft, magnetBotRight);
+		Gizmos.DrawLine(magnetBotRight, magnetTopRight);
+		Gizmos.DrawLine(magnetTopRight, magnetTopLeft);
+		Gizmos.DrawLine(magnetTopLeft, magnetBotLeft);
 	}
     #endregion
 }
